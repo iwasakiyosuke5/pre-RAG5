@@ -1,0 +1,61 @@
+Pdf-Analyze2の構築手順
+
+前提条件　Dockerがインストールされていること
+　　　　　dockercomposeがインストールされていること
+
+Laravelプロジェクトの作成　Laravel10で作成する。
+
+データベーステーブルの作成
+    コマンド　./vendor/bin/sail artisan make:migration create_fragments_table --create=fragments
+
+1. Fragmentモデルの作成
+    コマンド　./vendor/bin/sail artisan make:model Fragment
+
+				
+PDFアップロード機能実装
+    アップロード用のコントローラーを作成する　コマンド　./vendor/bin/sail artisan make:controller PdfController
+    routes/web.phpの書き換えを行う
+    画面resources/views/upload.blade.phpを作成する
+
+AIサービスの構築
+    pdf-analysis2ディレクトリ内にai-serviceディレクトリを作成　コマンド　mkdir ai-service
+    ai-service内にDockerfile（直接入力）を作成し、PythonとFlaskを設定します。
+    ai-service内にapp.pyを作成する。
+    pdf-analysis2/docker-compose.ymlにAIサービスの設定を追加　
+    Laravel Sailを再起動(pdf-analysis2内で)　コマンド　./vendor/bin/sail down　→ ./vendor/bin/sail up -d
+
+LaravelからAIサービスを呼び出す
+    PdfControllerを更新する。　
+
+CORSの設定
+    app/Http/Middleware/CorsMiddleware.php
+    もしくは
+    app/Http/Kernel.phpを変更する
+
+AIサービスの修正
+    PyMuPDFのインストール  ai-service/DockerfileにRUN pip install PyMuPDFを追加
+
+ベクトル化のためAIサービスの修正
+    Dockerfileの更新としてsentence-transformersを追記する
+
+検索エンドポイントの追加
+    app/Http/Controllers/SearchController.phpを作成します。
+
+
+再ビルドと再起動
+    cd /path/to/pdf-analysis
+    ./vendor/bin/sail down
+    ./vendor/bin/sail up --build -d
+
+app.pyをいじった場合、 Dockerコンテナの再ビルドと再起動をする。
+    ./vendor/bin/sail build
+    ./vendor/bin/sail up -d
+
+
+
+仮想環境の設定
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install requests
+スクリプトの実効例
+    python test_ai_service.py

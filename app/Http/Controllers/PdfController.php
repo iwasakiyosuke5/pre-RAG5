@@ -12,56 +12,56 @@ class PdfController extends Controller
     public function upload(Request $request)
     {
         $request->validate([
-            'file' => 'required|mimes:pdf|max:2048',
+            'file' => 'required|mimes:pdf|max:2048', // ファイルのバリデーション
         ]);
 
-        $fileName = time().'.'.$request->file->extension();  
-        $filePath = public_path('uploads/' . $fileName);
-        $request->file->move(public_path('uploads'), $fileName);
+        $fileName = time().'.'.$request->file->extension();   // ファイル名を生成
+        $filePath = public_path('uploads/' . $fileName);     // ファイルパスを生成
+        $request->file->move(public_path('uploads'), $fileName); // ファイルを保存
 
-        Log::info('Uploaded file path', ['file_path' => $filePath]);
+        Log::info('Uploaded file path', ['file_path' => $filePath]); // ログにファイルパスを出力
 
         // AIにPDFを送信して解析
-        $fragments = $this->analyzePdfWithAI($filePath);
+        $fragments = $this->analyzePdfWithAI($filePath); // AIサービスにリクエスト
 
         if ($fragments === null) {
-            return response()->json(['error' => 'Failed to analyze PDF'], 500);
+            return response()->json(['error' => 'Failed to analyze PDF'], 500); // エラー時のレスポンス
         }
 
         // フラグメント化されたデータをデータベースに保存
-        foreach ($fragments as $fragment) {
-            $vector = isset($fragment['vector']) ? json_encode($fragment['vector']) : null;
+        foreach ($fragments as $fragment) { // フラグメントをデータベースに保存
+            $vector = isset($fragment['vector']) ? json_encode($fragment['vector']) : null; // ベクトルを保存
             Fragment::create([
-                'content' => $fragment['content'],
-                'fragment_id' => $fragment['id'],
-                'vector' => $vector,
+                'content' => $fragment['content'], // コンテンツを保存
+                'fragment_id' => $fragment['id'], // フラグメントIDを保存
+                'vector' => $vector, // ベクトルを保存
                 'file_path' => 'uploads/' . $fileName, // ファイルパスを保存
             ]);
         }
 
-        return response()->json(['success' => 'File uploaded and analyzed successfully.']);
+        return response()->json(['success' => 'File uploaded and analyzed successfully.']); // 成功時のレスポンス
     }
 
     private function analyzePdfWithAI($filePath)
     {
-        $fileContent = file_get_contents($filePath);
+        $fileContent = file_get_contents($filePath); // ファイルの内容を取得
 
         // AIサービスへのリクエスト
         $response = Http::post('http://ai-service:5000/api/analyze', [
-            'file_content' => base64_encode($fileContent),
+            'file_content' => base64_encode($fileContent), // ファイルの内容をBase64エンコードして送信
         ]);
 
         Log::info('AI Service Request', [
-            'url' => 'http://ai-service:5000/api/analyze',
-            'payload' => base64_encode($fileContent),
-            'response_status' => $response->status(),
-            'response_body' => $response->body(),
+            'url' => 'http://ai-service:5000/api/analyze', // リクエストURL
+            'payload' => base64_encode($fileContent), // リクエストボディ
+            'response_status' => $response->status(),   // レスポンスステータス
+            'response_body' => $response->body(),    // レスポンスボディ
         ]);
 
         if ($response->failed()) {
-            return null;
+            return null; // リクエストが失敗した場合はnullを返す
         }
 
-        return $response->json()['fragments'] ?? null;
+        return $response->json()['fragments'] ?? null; // レスポンスからフラグメントを取得
     }
 }
