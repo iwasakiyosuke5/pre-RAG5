@@ -44,6 +44,7 @@
 <html>
 <head>
     <title>Search Results</title>
+    <a href="question" role="button">投稿ページへ</a>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/4.5.2/css/bootstrap.min.css">
 </head>
 <body>
@@ -61,7 +62,7 @@
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title">AI Response</h5>
-                    <p class="card-text">{{ $aiResponse }}</p>
+                    <p class="card-text">{!! $aiResponse !!}</p>
                 </div>
             </div>
             <br>

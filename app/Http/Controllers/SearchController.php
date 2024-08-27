@@ -5,7 +5,7 @@ use Illuminate\Http\Request;
 use App\Models\Fragment;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-
+use Illuminate\Support\Str;
 class SearchController extends Controller
 {
     private function extractKeywords($query)
@@ -55,30 +55,46 @@ class SearchController extends Controller
             $filteredResults = array_slice($results, 0, 5);
         }
     
-        // フィルタリングされた結果からコンテキストを作成（または上位5つを使用）
+        // フィルタリングされた結果からコンテキストを作成（上位3つを使用）
         $context = implode("\n", array_map(function($result) {
-            return $result['fragment']->content;
+            // return $result['fragment']->content;
+            return $result['fragment']->content . '\nFile_Path: ' . $result['fragment'];
         }, array_slice($filteredResults, 0, 5)));
     
         $aiResponse = $this->askAI($query, $context);
-    
+        
+
+        $aiResponseWithLinks = preg_replace(
+            '~(https?://[^\s]+|uploads/\S+\.\w+)~', // URLやファイルパスの正規表現
+            '<a href="$1" target="_blank">$1</a>',
+            $aiResponse
+        );
+
         return view('response', [
             'question' => $query,
-            'aiResponse' => $aiResponse,
+            'aiResponse' => $aiResponseWithLinks,
             'results' => $results
         ]);
     }
 
     private function vectorize($text)
     {
-        $aiServiceHost = env('AI_SERVICE_HOST', 'http://localhost:5000'); // AIサービスのホストを取得
-        
-        // AIサービスにテキストを送信してベクトル化
-        $response = Http::post("$aiServiceHost/api/vectorize", [    // ベクトル化APIにリクエスト
-            'text' => $text,        // テキストを送信
-        ]);
+        $apiKey = env('OPENAI_API_KEY'); // OpenAI APIキーを取得
 
-        return $response->json()['vector']; // レスポンスからベクトルを取得
+        $response = Http::withHeaders([ 
+            'Authorization' => 'Bearer ' . $apiKey,  
+            ])->post('https://api.openai.com/v1/embeddings', [
+                'model' => 'text-embedding-3-small',  // 使用するモデル
+                'input' => $text,  // 質問内容を送信
+            ]);
+        
+       
+        if ($response->successful()) {
+            return $response->json()['data'][0]['embedding'];; // ベクトルを返す
+        } else {
+            Log::error('OpenAI request failed', ['status' => $response->status(), 'body' => $response->body()]);
+            return array_fill(0, 512, 0); 
+        }
     }
 
     private function cosineSimilarity($vec1, $vec2) // コサイン類似度を計算
@@ -106,7 +122,7 @@ class SearchController extends Controller
         $response = Http::withHeaders([ // OpenAI APIにリクエスト
             'Authorization' => 'Bearer ' . $apiKey, // APIキーをヘッダーに追加
         ])->post('https://api.openai.com/v1/chat/completions', [ // チャット補完APIにリクエスト
-            'model' => 'gpt-3.5-turbo',  // または 'gpt-4' など、使用するモデルを指定
+            'model' => 'gpt-4o-mini',  // または 'gpt-4' など、使用するモデルを指定
             'messages' => [
                 [
                     'role' => 'system', // システムメッセージ
@@ -117,7 +133,7 @@ class SearchController extends Controller
                     'content' => "Question: $query\nContext: $context\nAnswer:" // クエリとコンテキストを含むメッセージ
                 ],
             ],
-            'max_tokens' => 150,
+            'max_tokens' => 200,
             'temperature' => 0.7,
         ]);
 
